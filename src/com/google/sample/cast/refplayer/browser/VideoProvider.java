@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 
 public class VideoProvider {
-
+    
     private static final String TAG = "VideoProvider";
     private static final String TAG_VIDEOS = "videos";
     private static final String TAG_HLS = "hls";
@@ -50,11 +50,14 @@ public class VideoProvider {
     private static final String TAG_VIDEO_TYPE = "type";
     private static final String TAG_VIDEO_URL = "url";
     private static final String TAG_VIDEO_MIME = "mime";
-
+    
     private static final String TAG_CATEGORIES = "categories";
     private static final String TAG_NAME = "name";
     private static final String TAG_STUDIO = "studio";
     private static final String TAG_SOURCES = "sources";
+    private static final String TAG_PRODUCTION_ID = "productionid";
+    private static final String TAG_POST_DATA = "postData";
+    private static final String TAG_PROGRAMME_DATA = "programmeData";
     private static final String TAG_SUBTITLE = "subtitle";
     private static final String TAG_DURATION = "duration";
     private static final String TAG_TRACKS = "tracks";
@@ -67,12 +70,15 @@ public class VideoProvider {
     private static final String TAG_THUMB = "image-480x270"; // "thumb";
     private static final String TAG_IMG_780_1200 = "image-780x1200";
     private static final String TAG_TITLE = "title";
-
+    
     public static final String KEY_DESCRIPTION = "description";
-
+    public static final String KEY_PRODUCTION_ID = "productionId";
+    public static final String KEY_POST_DATA = "postData";
+    public static final String KEY_PROGRAMME_DATA = "programmeData";
+    
     private static final String TARGET_FORMAT = TAG_HLS;
     private static List<MediaInfo> mediaList;
-
+    
     protected JSONObject parseUrl(String urlString) {
         InputStream is = null;
         try {
@@ -80,7 +86,7 @@ public class VideoProvider {
             URLConnection urlConnection = url.openConnection();
             is = new BufferedInputStream(urlConnection.getInputStream());
             BufferedReader reader = new BufferedReader(new InputStreamReader(
-                    urlConnection.getInputStream(), "iso-8859-1"), 1024);
+                                                                             urlConnection.getInputStream(), "iso-8859-1"), 1024);
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -101,9 +107,9 @@ public class VideoProvider {
             }
         }
     }
-
+    
     public static List<MediaInfo> buildMedia(String url) throws JSONException {
-
+        
         if (null != mediaList) {
             return mediaList;
         }
@@ -127,6 +133,9 @@ public class VideoProvider {
                         String mimeType = null;
                         JSONObject video = videos.getJSONObject(j);
                         String subTitle = video.getString(TAG_SUBTITLE);
+                        String productionId = video.getString(TAG_PRODUCTION_ID);
+                        JSONObject postData = video.getJSONObject(TAG_POST_DATA);
+                        JSONObject programmeData = video.getJSONObject(TAG_PROGRAMME_DATA);
                         JSONArray videoSpecs = video.getJSONArray(TAG_SOURCES);
                         if (null == videoSpecs || videoSpecs.length() == 0) {
                             continue;
@@ -135,7 +144,7 @@ public class VideoProvider {
                             JSONObject videoSpec = videoSpecs.getJSONObject(k);
                             if (TARGET_FORMAT.equals(videoSpec.getString(TAG_VIDEO_TYPE))) {
                                 videoUrl = urlPrefixMap.get(TARGET_FORMAT) + videoSpec
-                                        .getString(TAG_VIDEO_URL);
+                                .getString(TAG_VIDEO_URL);
                                 mimeType = videoSpec.getString(TAG_VIDEO_MIME);
                             }
                         }
@@ -144,7 +153,7 @@ public class VideoProvider {
                         }
                         String imageUrl = urlPrefixMap.get(TAG_IMAGES) + video.getString(TAG_THUMB);
                         String bigImageUrl = urlPrefixMap.get(TAG_IMAGES) + video
-                                .getString(TAG_IMG_780_1200);
+                        .getString(TAG_IMG_780_1200);
                         String title = video.getString(TAG_TITLE);
                         String studio = video.getString(TAG_STUDIO);
                         int duration = video.getInt(TAG_DURATION);
@@ -156,30 +165,30 @@ public class VideoProvider {
                                 for (int k = 0; k < tracksArray.length(); k++) {
                                     JSONObject track = tracksArray.getJSONObject(k);
                                     tracks.add(buildTrack(track.getLong(TAG_TRACK_ID),
-                                            track.getString(TAG_TRACK_TYPE),
-                                            track.getString(TAG_TRACK_SUBTYPE),
-                                            urlPrefixMap.get(TAG_TRACKS) + track
-                                                    .getString(TAG_TRACK_CONTENT_ID),
-                                            track.getString(TAG_TRACK_NAME),
-                                            track.getString(TAG_TRACK_LANGUAGE)
-                                    ));
+                                                          track.getString(TAG_TRACK_TYPE),
+                                                          track.getString(TAG_TRACK_SUBTYPE),
+                                                          urlPrefixMap.get(TAG_TRACKS) + track
+                                                          .getString(TAG_TRACK_CONTENT_ID),
+                                                          track.getString(TAG_TRACK_NAME),
+                                                          track.getString(TAG_TRACK_LANGUAGE)
+                                                          ));
                                 }
                             }
                         }
                         mediaList.add(buildMediaInfo(title, studio, subTitle, duration, videoUrl,
-                                mimeType, imageUrl, bigImageUrl, tracks));
+                                                     mimeType, imageUrl, bigImageUrl, tracks, productionId, postData, programmeData));
                     }
                 }
             }
         }
         return mediaList;
     }
-
+    
     private static MediaInfo buildMediaInfo(String title, String studio, String subTitle,
-            int duration, String url, String mimeType, String imgUrl, String bigImageUrl,
-            List<MediaTrack> tracks) {
+                                            int duration, String url, String mimeType, String imgUrl, String bigImageUrl,
+                                            List<MediaTrack> tracks, String productionId, JSONObject postData, JSONObject programmeData) {
         MediaMetadata movieMetadata = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE);
-
+        
         movieMetadata.putString(MediaMetadata.KEY_SUBTITLE, studio);
         movieMetadata.putString(MediaMetadata.KEY_TITLE, title);
         movieMetadata.addImage(new WebImage(Uri.parse(imgUrl)));
@@ -188,22 +197,25 @@ public class VideoProvider {
         try {
             jsonObj = new JSONObject();
             jsonObj.put(KEY_DESCRIPTION, subTitle);
+            jsonObj.put(KEY_PRODUCTION_ID, productionId);
+            jsonObj.put(KEY_POST_DATA, postData);
+            jsonObj.put(KEY_PROGRAMME_DATA, programmeData);
         } catch (JSONException e) {
             Log.e(TAG, "Failed to add description to the json object", e);
         }
-
+        
         return new MediaInfo.Builder(url)
-                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
-                .setContentType(mimeType)
-                .setMetadata(movieMetadata)
-                .setMediaTracks(tracks)
-                .setStreamDuration(duration * 1000)
-                .setCustomData(jsonObj)
-                .build();
+        .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+        .setContentType(mimeType)
+        .setMetadata(movieMetadata)
+        .setMediaTracks(tracks)
+        .setStreamDuration(duration * 1000)
+        .setCustomData(jsonObj)
+        .build();
     }
-
+    
     private static MediaTrack buildTrack(long id, String type, String subType, String contentId,
-            String name, String language) {
+                                         String name, String language) {
         int trackType = MediaTrack.TYPE_UNKNOWN;
         if ("text".equals(type)) {
             trackType = MediaTrack.TYPE_TEXT;
@@ -212,7 +224,7 @@ public class VideoProvider {
         } else if ("audio".equals(type)) {
             trackType = MediaTrack.TYPE_AUDIO;
         }
-
+        
         int trackSubType = MediaTrack.SUBTYPE_NONE;
         if (subType != null) {
             if ("captions".equals(type)) {
@@ -221,12 +233,12 @@ public class VideoProvider {
                 trackSubType = MediaTrack.SUBTYPE_SUBTITLES;
             }
         }
-
+        
         return new MediaTrack.Builder(id, trackType)
-                .setName(name)
-                .setSubtype(trackSubType)
-                .setContentId(contentId)
-                .setLanguage(language).build();
+        .setName(name)
+        .setSubtype(trackSubType)
+        .setContentId(contentId)
+        .setLanguage(language).build();
     }
 }
 
